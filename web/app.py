@@ -24,7 +24,38 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup/shutdown lifecycle — periodic cleanup of expired tokens/sessions."""
+    """
+    Startup/shutdown lifecycle.
+    - Initialises DB
+    - Starts the Telegram bot + scheduler as background tasks
+    - Runs periodic cleanup of expired tokens/sessions
+    This allows Railway to run everything via `uvicorn main:app`.
+    """
+    import sys
+    import os
+    from dotenv import load_dotenv
+
+    # Load .env (Railway injects env vars anyway, but safe to call)
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+
+    # Init DB
+    await db.init_db()
+
+    # Seed primary admin
+    try:
+        primary_id = int(os.getenv("ADMIN_ID", "0"))
+        if primary_id:
+            existing = await db.get_admin_ids()
+            if primary_id not in existing:
+                await db.add_admin(primary_id, "superadmin")
+                logger.info("Seeded primary admin %s", primary_id)
+    except (ValueError, TypeError):
+        pass
+
+    # Start Telegram bot as background task
+    bot_task = asyncio.create_task(_run_bot(), name="telegram_bot")
+
+    # Periodic cleanup
     async def cleanup_loop():
         while True:
             await asyncio.sleep(3600)
@@ -34,9 +65,60 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error("Cleanup error: %s", e)
 
-    task = asyncio.create_task(cleanup_loop())
+    cleanup_task = asyncio.create_task(cleanup_loop())
+
     yield
-    task.cancel()
+
+    # Shutdown
+    logger.info("Shutting down bot and cleanup tasks...")
+    bot_task.cancel()
+    cleanup_task.cancel()
+    try:
+        await bot_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    await db.close_db()
+
+
+async def _run_bot():
+    """Run the Telegram bot + scheduler inside the uvicorn event loop."""
+    import os
+    from aiogram import Bot, Dispatcher
+    from aiogram.fsm.storage.memory import MemoryStorage
+    from aiogram.client.default import DefaultBotProperties
+    from handlers import get_all_routers
+    from middlewares.middleware import RateLimitMiddleware
+    from handlers.scheduler_handler import scheduler_loop
+
+    token = os.getenv("BOT_TOKEN", "")
+    if not token:
+        logger.error("BOT_TOKEN not set — Telegram bot will NOT start")
+        return
+
+    bot = Bot(token=token, default=DefaultBotProperties(parse_mode="HTML"))
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.message.middleware(RateLimitMiddleware(max_requests=10, window=5))
+    dp.callback_query.middleware(RateLimitMiddleware(max_requests=15, window=5))
+    for router in get_all_routers():
+        dp.include_router(router)
+
+    sched_task = asyncio.create_task(scheduler_loop(bot), name="scheduler")
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("🤖 Telegram bot started")
+        await dp.start_polling(bot)
+    finally:
+        sched_task.cancel()
+        try:
+            await sched_task
+        except asyncio.CancelledError:
+            pass
+        await bot.session.close()
+        logger.info("🤖 Telegram bot stopped")
 
 
 def create_app() -> FastAPI:

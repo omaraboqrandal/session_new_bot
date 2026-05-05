@@ -32,6 +32,9 @@ from handlers.scheduler_handler import scheduler_loop
 import uvicorn
 from web.app import app as web_app
 
+# Expose FastAPI app at module level so `uvicorn main:app` works on Railway
+app = web_app
+
 # Try to import SQLite storage (aiogram-sqlite-storage optional dep)
 try:
     from aiogram.fsm.storage.redis import RedisStorage  # type: ignore
