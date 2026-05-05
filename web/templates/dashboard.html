@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Session Manager Panel{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value" id="totalSessions">{{ total_sessions }}</span>
+            <span class="stat-label">Total Sessions</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value" id="totalCountries">{{ countries }}</span>
+            <span class="stat-label">Countries</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon emerald">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ spam_counts.get('FREE', 0) }}</span>
+            <span class="stat-label">FREE</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon yellow">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ spam_counts.get('SPAM', 0) }}</span>
+            <span class="stat-label">SPAM</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ spam_counts.get('BANNED', 0) }}</span>
+            <span class="stat-label">BANNED</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ admins|length }}</span>
+            <span class="stat-label">Admins</span>
+        </div>
+    </div>
+</div>
+
+<!-- Main content grid -->
+<div class="dashboard-grid">
+    <!-- Country breakdown -->
+    <div class="card" id="sessionsSection">
+        <div class="card-header">
+            <h2>Sessions by Country</h2>
+            <button class="btn btn-sm btn-outline" onclick="exportAllSessions()">Export All</button>
+        </div>
+        <div class="card-body">
+            {% if country_data %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Country</th>
+                        <th>Sessions</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for folder, info in country_data.items() %}
+                    <tr>
+                        <td>{{ info.flag }} {{ info.name }}</td>
+                        <td><span class="badge badge-blue">{{ info.count }}</span></td>
+                        <td>
+                            <button class="btn btn-xs btn-outline" onclick="viewCountrySessions('{{ folder }}')">View</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No sessions found</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Spam Status Chart -->
+    <div class="card">
+        <div class="card-header">
+            <h2>Status Distribution</h2>
+        </div>
+        <div class="card-body chart-container">
+            <canvas id="spamChart" width="300" height="300"></canvas>
+        </div>
+    </div>
+
+    <!-- Admins Section -->
+    <div class="card" id="adminsSection">
+        <div class="card-header">
+            <h2>Admins</h2>
+            <button class="btn btn-sm btn-primary" onclick="showAddAdmin()">+ Add</button>
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>User ID</th>
+                        <th>Role</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="adminsTable">
+                    {% for admin in admins %}
+                    <tr>
+                        <td><code>{{ admin.user_id }}</code></td>
+                        <td><span class="badge badge-{{ 'red' if admin.role == 'superadmin' else 'blue' if admin.role == 'admin' else 'gray' }}">{{ admin.role }}</span></td>
+                        <td>
+                            {% if admin.role != 'superadmin' %}
+                            <button class="btn btn-xs btn-danger" onclick="removeAdmin({{ admin.user_id }})">Remove</button>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Settings Section -->
+    <div class="card" id="settingsSection">
+        <div class="card-header">
+            <h2>Settings</h2>
+            <button class="btn btn-sm btn-outline" onclick="refreshSettings()">Refresh</button>
+        </div>
+        <div class="card-body" id="settingsContent">
+            <p class="text-muted">Click "Refresh" to load current settings</p>
+        </div>
+    </div>
+
+    <!-- Scheduler Section -->
+    <div class="card" id="schedulerSection">
+        <div class="card-header">
+            <h2>Scheduler</h2>
+        </div>
+        <div class="card-body">
+            <div class="scheduler-grid">
+                <div class="scheduler-item">
+                    <div class="scheduler-info">
+                        <span class="scheduler-name">Auto-Check</span>
+                        <span class="scheduler-desc">Spam + contact check</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggleAutoCheck" {{ 'checked' if sched_info.auto_check }} onchange="toggleScheduler('auto_check')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="scheduler-item">
+                    <div class="scheduler-info">
+                        <span class="scheduler-name">Daily Report</span>
+                        <span class="scheduler-desc">Stats summary</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggleDailyReport" {{ 'checked' if sched_info.daily_report }} onchange="toggleScheduler('daily_report')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="scheduler-item">
+                    <div class="scheduler-info">
+                        <span class="scheduler-name">Auto-Backup</span>
+                        <span class="scheduler-desc">ZIP to admin</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggleAutoBackup" {{ 'checked' if sched_info.auto_backup }} onchange="toggleScheduler('auto_backup')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="card card-full">
+        <div class="card-header">
+            <h2>Recent Activity</h2>
+        </div>
+        <div class="card-body">
+            {% if recent_logs %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>User ID</th>
+                        <th>Action</th>
+                        <th>Detail</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_logs %}
+                    <tr>
+                        <td><code>{{ log.user_id }}</code></td>
+                        <td><span class="badge badge-blue">{{ log.action }}</span></td>
+                        <td>{{ log.detail or '-' }}</td>
+                        <td class="text-muted ts" data-ts="{{ log.ts }}">{{ log.ts }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No recent activity</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Session detail modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 id="modalTitle">Sessions</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <p>Loading...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Add admin modal -->
+<div class="modal-overlay" id="addAdminModal" onclick="closeAddAdmin()">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>Add Admin</h3>
+            <button class="modal-close" onclick="closeAddAdmin()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Telegram User ID</label>
+                <input type="number" id="adminUserId" placeholder="e.g. 123456789">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select id="adminRole">
+                    <option value="admin">Admin</option>
+                    <option value="readonly">Read Only</option>
+                </select>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="addAdmin()">Add Admin</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Spam chart data
+const spamData = {{ spam_counts | tojson }};
+const ctx = document.getElementById('spamChart');
+if (ctx) {
+    const labels = Object.keys(spamData);
+    const values = Object.values(spamData);
+    const colors = {
+        'FREE': '#10b981', 'SPAM': '#f59e0b', 'BANNED': '#ef4444',
+        'NEW_REGISTERED': '#3b82f6', 'Unknown': '#6b7280', 'UNKNOWN': '#6b7280'
+    };
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: labels.map(l => colors[l] || '#6b7280'),
+                borderColor: '#1e293b',
+                borderWidth: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#94a3b8', font: { family: 'Inter', size: 13 }, padding: 16 }
+                }
+            }
+        }
+    });
+}
+
+// Format timestamps
+document.querySelectorAll('.ts').forEach(el => {
+    const ts = parseInt(el.dataset.ts);
+    if (ts) {
+        const d = new Date(ts * 1000);
+        el.textContent = d.toLocaleString();
+    }
+});
+
+// Auto-refresh stats every 30 seconds
+setInterval(() => {
+    fetch('/api/sessions').then(r => r.json()).then(data => {
+        let total = 0;
+        let countries = 0;
+        for (const k in data) {
+            countries++;
+            total += data[k].phones.length;
+        }
+        const el1 = document.getElementById('totalSessions');
+        const el2 = document.getElementById('totalCountries');
+        if (el1) el1.textContent = total;
+        if (el2) el2.textContent = countries;
+    }).catch(() => {});
+}, 30000);
+</script>
+{% endblock %}

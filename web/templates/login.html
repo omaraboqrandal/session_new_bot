@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Session Manager Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="login-logo">SM</div>
+                <h1>Session Manager</h1>
+                <p>Enter your one-time token to access the panel</p>
+            </div>
+
+            {% if error %}
+            <div class="alert alert-error">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                <span>{{ error }}</span>
+            </div>
+            {% endif %}
+
+            <form method="post" action="/login" class="login-form" id="loginForm">
+                <div class="form-group">
+                    <label for="token">Login Token</label>
+                    <input
+                        type="text"
+                        id="token"
+                        name="token"
+                        value="{{ token }}"
+                        placeholder="Paste your token here..."
+                        autocomplete="off"
+                        required
+                    >
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+                    <span>Login</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <p>Token generated from the Telegram bot</p>
+                <p>Tokens expire after 10 minutes</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-submit if token is in URL
+        document.addEventListener('DOMContentLoaded', function() {
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('token');
+            if (token && token.length > 10) {
+                document.getElementById('token').value = token;
+                document.getElementById('loginBtn').disabled = true;
+                document.getElementById('loginBtn').innerHTML = '<span>Authenticating...</span>';
+                document.getElementById('loginForm').submit();
+            }
+        });
+    </script>
+</body>
+</html>
